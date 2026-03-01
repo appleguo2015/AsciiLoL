@@ -1,6 +1,13 @@
-# ASCII Art Generator (with GIF support)
+# AsciiLol
 
 A small C++ command-line tool that converts images into ASCII art and can play GIF animations in the terminal.
+
+## Show Frog Gif
+
+![alt text](show.gif)
+
+#### This is the frog gif no thanks
+#### ![alt text](frog.gif)
 
 ## Features
 
