@@ -26,6 +26,7 @@
 class SimpleASCIIArt {
 private:
     float sample_rate = 0.3f;  // Smaller sample rate for console display
+    bool use_color = false;
     
     // clear(cross-platform)
     void clearScreen() {
@@ -34,6 +35,32 @@ private:
         #else
             system("clear");
         #endif
+    }
+
+    void appendAsciiChar(std::string& line, char symbol, unsigned char r, unsigned char g,
+                         unsigned char b, unsigned char a) const {
+        if (a == 0) {
+            line += ' ';
+            return;
+        }
+
+        if (!use_color) {
+            line += symbol;
+            return;
+        }
+
+        int color_r = static_cast<int>(r) * static_cast<int>(a) / 255;
+        int color_g = static_cast<int>(g) * static_cast<int>(a) / 255;
+        int color_b = static_cast<int>(b) * static_cast<int>(a) / 255;
+
+        line += "\033[38;2;";
+        line += std::to_string(color_r);
+        line += ';';
+        line += std::to_string(color_g);
+        line += ';';
+        line += std::to_string(color_b);
+        line += 'm';
+        line += symbol;
     }
     
 public:
@@ -114,14 +141,18 @@ public:
                 unsigned char r = data[idx];
                 unsigned char g = (channels >= 2) ? data[idx + 1] : r;
                 unsigned char b = (channels >= 3) ? data[idx + 2] : r;
+                unsigned char a = (channels >= 4) ? data[idx + 3] : 255;
                 
                 // Luminance formula: 0.299R + 0.587G + 0.114B
-                float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+                float gray = (0.299f * r + 0.587f * g + 0.114f * b) * (a / 255.0f);
                 
                 // Map grayscale value to ASCII character
                 int char_idx = static_cast<int>(gray / 255.0f * (symbols.size() - 1));
                 char_idx = std::max(0, std::min(static_cast<int>(symbols.size() - 1), char_idx));
-                line += symbols[char_idx];
+                appendAsciiChar(line, symbols[char_idx], r, g, b, a);
+            }
+            if (use_color) {
+                line += "\033[0m";
             }
             ascii.push_back(line);
         }
@@ -240,7 +271,10 @@ public:
                     // Map to ASCII character
                     int char_idx = static_cast<int>(gray / 255.0f * (symbols.size() - 1));
                     char_idx = std::max(0, std::min(static_cast<int>(symbols.size() - 1), char_idx));
-                    line += symbols[char_idx];
+                    appendAsciiChar(line, symbols[char_idx], r, g, b, a);
+                }
+                if (use_color) {
+                    line += "\033[0m";
                 }
                 ascii_frame.push_back(line);
             }
@@ -311,6 +345,10 @@ public:
     void setSampleRate(float rate) {
         sample_rate = std::max(0.1f, std::min(1.0f, rate));
     }
+
+    void setUseColor(bool enabled) {
+        use_color = enabled;
+    }
 };
 
 namespace {
@@ -322,6 +360,7 @@ void printUsage(const char* program) {
     std::cout << "  -f            Force static image mode" << std::endl;
     std::cout << "  -gif, -g      Force GIF mode" << std::endl;
     std::cout << "  -s <symbols>  Character set for ASCII art" << std::endl;
+    std::cout << "  -c, --color   Enable ANSI truecolor output" << std::endl;
     std::cout << "  -r <rate>     Sample rate 0.1~1.0 (default: 0.3)" << std::endl;
     std::cout << "  -d <delay>    GIF frame delay in ms (<=0 means use GIF delay)" << std::endl;
     std::cout << "  -l <loops>    GIF loop count (0 for infinite, default: 0)" << std::endl;
@@ -330,6 +369,7 @@ void printUsage(const char* program) {
     std::cout << "\nExamples:" << std::endl;
     std::cout << "  " << program << " image.jpg" << std::endl;
     std::cout << "  " << program << " -s \" .:-=+*#%@\" image.jpg" << std::endl;
+    std::cout << "  " << program << " -c -s \" .:-=+*#%@\" image.jpg" << std::endl;
     std::cout << "  " << program << " -gif -d 50 -l 3 -s \" .,:;08@\" animation.gif" << std::endl;
 }
 
@@ -365,6 +405,7 @@ int main(int argc, char* argv[]) {
     float sample_rate = 0.3f;
     int frame_delay = -1;
     int loop_count = 0;
+    bool use_color = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -404,6 +445,11 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             symbols = argv[++i];
+            continue;
+        }
+
+        if (arg == "-c" || arg == "--color") {
+            use_color = true;
             continue;
         }
 
@@ -473,6 +519,7 @@ int main(int argc, char* argv[]) {
     }
 
     art.setSampleRate(sample_rate);
+    art.setUseColor(use_color);
 
     if (mode == Mode::Auto) {
         mode = isGifFile(filename) ? Mode::Gif : Mode::Static;
